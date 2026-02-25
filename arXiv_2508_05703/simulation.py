@@ -8,9 +8,6 @@ def manual_swap(mps, i, j, max_bond=None):
     t2 = mps[j]
 
     if not isinstance(t1, qtn.Tensor) or not isinstance(t2, qtn.Tensor):
-        # Clean up if tuple?
-        # But this implies previous step failed.
-        # Try to recover by selecting one? No, safer to fail.
         raise ValueError(f"manual_swap: mps[{i}] or mps[{j}] is not a Tensor. Types: {type(t1)}, {type(t2)}")
 
     k1 = mps.site_ind(i)
@@ -35,10 +32,9 @@ def manual_swap(mps, i, j, max_bond=None):
     V.drop_tags()
     V.add_tag(tag2)
 
-    mps.delete(tag1)
-    mps.delete(tag2)
-    mps.add_tensor(U)
-    mps.add_tensor(V)
+    # In-place modification to preserve list order
+    t1.modify(data=U.data, inds=U.inds, tags=U.tags)
+    t2.modify(data=V.data, inds=V.inds, tags=V.tags)
 
 def manual_gate(mps, gate, i, j, max_bond=None):
     t1 = mps[i]
@@ -77,10 +73,9 @@ def manual_gate(mps, gate, i, j, max_bond=None):
     V.drop_tags()
     V.add_tag(tag2)
 
-    mps.delete(tag1)
-    mps.delete(tag2)
-    mps.add_tensor(U)
-    mps.add_tensor(V)
+    # In-place modification
+    t1.modify(data=U.data, inds=U.inds, tags=U.tags)
+    t2.modify(data=V.data, inds=V.inds, tags=V.tags)
 
 def manual_single_site_gate(mps, gate, i):
     t = mps[i]
@@ -88,10 +83,6 @@ def manual_single_site_gate(mps, gate, i):
         raise ValueError(f"manual_single_site_gate: mps[{i}] is not a Tensor. Type: {type(t)}")
 
     k = mps.site_ind(i)
-
-    # Gate G: (k_out, k_in)
-    # T: (..., k, ...)
-    # Contract k with k_in.
 
     d = 2
     gate_data = gate if gate.ndim == 2 else gate.reshape(d, d)
@@ -102,14 +93,12 @@ def manual_single_site_gate(mps, gate, i):
     T_gated = qtn.tensor_contract(t, G)
     T_gated.reindex_({k_out: k}, inplace=True)
 
-    # Update tensor in MPS
-    # Just replace it.
     tag = f'I{i}'
     T_gated.drop_tags()
     T_gated.add_tag(tag)
 
-    mps.delete(tag)
-    mps.add_tensor(T_gated)
+    # In-place modify
+    t.modify(data=T_gated.data, inds=T_gated.inds, tags=T_gated.tags)
 
 class RandomizedLindbladSimulator:
     def __init__(self, L, J, g, dt=0.1, max_bond=32, beta=float('inf'),
